@@ -1,8 +1,7 @@
 (ns gsheetplus.auth
   "Build authenticated Google Sheets service instances from JSON credentials.
   Credential retrieval is the caller's responsibility."
-  (:require [clojure.core.memoize :as memo]
-            [clojure.tools.logging :as log])
+  (:require [clojure.tools.logging :as log])
   (:import (com.google.api.client.googleapis.auth.oauth2 GoogleCredential)
            (com.google.api.client.googleapis.javanet GoogleNetHttpTransport)
            (com.google.api.client.json.jackson2 JacksonFactory)
@@ -28,7 +27,3 @@
         (.setApplicationName "gsheetplus")
         .build)))
 
-(def login
-  "Memoized `build-service`. LRU cache, up to 5 credential streams.
-  Same stream reference returns the cached Sheets instance."
-  (memo/lru build-service {} :lru/threshold 5))

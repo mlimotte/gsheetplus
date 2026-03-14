@@ -3,7 +3,8 @@
    [clojure.test :refer [deftest is are testing]]
    [gsheetplus.cell :as cell])
   (:import
-   (com.google.api.services.sheets.v4.model CellData ExtendedValue)))
+    (clojure.lang ExceptionInfo)
+    (com.google.api.services.sheets.v4.model CellData ExtendedValue)))
 
 ;;; ── cell->clj ─────────────────────────────────────────────────────────────
 
@@ -45,7 +46,7 @@
   (is (nil? (cell/cell->clj (CellData.)))))
 
 (deftest test-cell->clj-ambiguous-ev-and-uev
-  (is (thrown? clojure.lang.ExceptionInfo
+  (is (thrown? ExceptionInfo
                (cell/cell->clj {"effectiveValue"    {"stringValue" "a"}
                                 "userEnteredValue"  {"stringValue" "b"}}))))
 

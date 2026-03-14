@@ -1,7 +1,7 @@
 (ns build
   (:require [clojure.tools.build.api :as b]))
 
-(def lib 'io.github.mlimotte/quandary)
+(def lib 'io.github.mlimotte/gsheetplus)
 (def version "0.9.0")
 (def class-dir "target/classes")
 (def basis (b/create-basis {:project "deps.edn"}))

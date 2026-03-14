@@ -146,11 +146,11 @@
        (map-indexed vector)
        (reduce
         (fn [[section-name headers acc] [idx [a :as row]]]
-          (if-let [new-section (some-> a
-                                       (when-not (nil-or-blank? a) a)
-                                       (string/replace #"\s*\([^\)]+\)\s*" " ")
-                                       string/trim
-                                       ->kebab-keyword)]
+          (if-let [new-section (when-not (nil-or-blank? a)
+                                 (-> a
+                                     (string/replace #"\s*\([^\)]+\)\s*" " ")
+                                     string/trim
+                                     ->kebab-keyword))]
             [new-section nil (assoc acc new-section [])]
             (if headers
               [section-name
@@ -281,7 +281,7 @@
          (with-meta
            (cond->> (map #(row->record headers % options) data-raw)
              stop-on-blank-row? (take-while #(some some? (vals %)))
-             row-idx?           (map-indexed (fn [idx r] (assoc r ::row-idx (inc idx))))
+             row-idx?           (map-indexed (fn [idx r] (assoc r ::core/row-idx (inc idx))))
              filter-fn          (filter filter-fn))
            {:headers headers}))))))
 
@@ -305,5 +305,5 @@
       [info
        (cond->> (map (partial row->record headers) data-raw)
          row-idx?  (map-indexed (fn [idx r]
-                                  (assoc r ::row-idx (+ (or start-row-idx 0) (inc idx)))))
+                                  (assoc r ::core/row-idx (+ (or start-row-idx 0) (inc idx)))))
          filter-fn (filter filter-fn))])))

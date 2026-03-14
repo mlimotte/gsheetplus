@@ -15,6 +15,26 @@ A clean Clojure library for reading and writing Google Sheets. Designed for even
 
 Credential retrieval is the caller's responsibility. You supply an `InputStream` of a Google service account JSON key file — obtained however you like (file, AWS Secrets Manager, environment variable, etc.).
 
+### Setting up for Google Sheets permissions
+
+* Create a new Google API project if one does not already exist:
+    https://console.developers.google.com/projectselector/apis/dashboard
+
+* Enable APIs
+** https://console.developers.google.com/apis/api/sheets.googleapis.com/overview
+
+* Get the service account id (which looks like an email address)
+** Create a service account if you don't already have one
+** Find the id at `https://console.developers.google.com/iam-admin/serviceaccounts/project`
+
+* For the sheet you want to access:
+  * Get the sheet id from the Sheet URL; the string following the `d/`
+  * Click the Share button on the Sheet and add the service account id w/ view or edit permissions as required.
+
+* Create a Key for your service account, as a JSON file. Pass these creds to the gsheet api. 
+  (Hint: click the three dots next to the service account)
+  
+
 ### Build a service
 
 ```clojure
@@ -31,16 +51,7 @@ Credential retrieval is the caller's responsibility. You supply an `InputStream`
 (def service (auth/build-service (io/resource "google-creds.json")))
 ```
 
-`build-service` authenticates with Sheets + Drive scopes and returns a `com.google.api.services.sheets.v4.Sheets` instance.
-
-### Memoized login
-
-If the same credentials stream reference is used in multiple places, use `auth/login` to avoid re-authenticating:
-
-```clojure
-;; Cached — same stream ref returns the same Sheets instance (LRU, up to 5 entries)
-(def service (auth/login my-creds-stream))
-```
+`build-service` authenticates with Sheets + Drive scopes and returns a `com.google.api.services.sheets.v4.Sheets` instance. Caching the returned service is the caller's responsibility.
 
 ## Reading Sheets
 
@@ -64,7 +75,7 @@ Parenthetical annotations are stripped: `"Price (USD)"` → `:price`.
 (table/read-single-table service spreadsheet-id "Sheet1"
   {:prune-start?      true   ; drop rows before a /START marker row
    :stop-on-blank-row? true  ; stop at the first all-blank record
-   :row-idx?          true   ; add ::table/row-idx (1-based) to each record
+   :row-idx?          true   ; add ::core/row-idx (1-based) to each record
    :filter-fn         some?  ; keep only records satisfying this predicate
    :column-name-fn    my-fn  ; custom header → keyword conversion
    :drop-rows         2})    ; skip the first N rows before treating row 1 as headers
@@ -231,6 +242,12 @@ OTEL spans are emitted automatically for major I/O calls when the OpenTelemetry 
 
 Spans are no-ops when the agent is absent — no configuration required.
 
+## Run Tests
+
+```bash
+clj -M:test
+```
+
 ## Building and Releasing
 
 ```bash
@@ -242,3 +259,7 @@ clj -T:build deploy
 ```
 
 The version and artifact coordinates are set in `build.clj`.
+
+## Thanks
+
+A big thank you to the team at SparkFund for [google-apps-clj](https://github.com/SparkFund/google-apps-clj). It was a wonderfully designed library that I relied on heavily for years. While it is no longer actively maintained, it laid an excellent foundation and directly inspired this project. `gsheetplus` extends that work with a richer set of higher-level functions for reading and writing sheets.
