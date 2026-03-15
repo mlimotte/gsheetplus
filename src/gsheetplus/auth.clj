@@ -9,10 +9,15 @@
            (com.google.api.services.drive DriveScopes)
            (java.io InputStream)))
 
-(def ^:private scopes
+(def ^:private SCOPES
   "OAuth scopes required for Sheets read/write and Drive access."
   [SheetsScopes/SPREADSHEETS
    DriveScopes/DRIVE])
+
+(defn credential-with-scopes
+  [^InputStream creds-stream transport factory scopes]
+  (-> (GoogleCredential/fromStream creds-stream transport factory)
+      (.createScoped scopes)))
 
 (defn build-service
   "Build an authenticated Sheets service from a JSON service-account credentials InputStream.
@@ -21,9 +26,7 @@
   (log/info "Building Google Sheets service")
   (let [transport (GoogleNetHttpTransport/newTrustedTransport)
         factory (JacksonFactory/getDefaultInstance)
-        creds (-> (GoogleCredential/fromStream creds-stream transport factory)
-                  (.createScoped scopes))]
+        creds (credential-with-scopes creds-stream transport factory SCOPES)]
     (-> (Sheets$Builder. transport factory creds)
         (.setApplicationName "gsheetplus")
         .build)))
-
