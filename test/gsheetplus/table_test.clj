@@ -4,23 +4,6 @@
     [clojure.test :refer [deftest is are testing]]
     [gsheetplus.table :as table]))
 
-;;; ── ->kebab-keyword ───────────────────────────────────────────────────────
-
-(deftest test-kebab-keyword-plain
-  (is (= :first-name (table/->kebab-keyword "First Name"))))
-
-(deftest test-kebab-keyword-parenthetical
-  (are [input expected] (= expected (table/->kebab-keyword input))
-                        "Unit Price (USD)" :unit-price
-                        "Name (optional)" :name
-                        "Column A (required)" :column-a))
-
-(deftest test-kebab-keyword-special-chars
-  (are [input expected] (= expected (table/->kebab-keyword input))
-                        "A/B Test" :a-b-test
-                        "foo--bar" :foo-bar
-                        "  spaces  " :spaces))
-
 ;;; ── headers-from-row ──────────────────────────────────────────────────────
 
 (deftest test-headers-from-row-simple

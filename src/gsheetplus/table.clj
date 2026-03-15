@@ -2,24 +2,11 @@
   "High-level table reading and data parsing for Google Sheets.
   Builds on gsheetplus.core (raw cell reads) and gsheetplus.cell (type conversion)."
   (:require
-   [clojure.string :as string]
-   [gsheetplus.cell :as cell]
-   [gsheetplus.core :as core]
-   [steffan-westcott.clj-otel.api.trace.span :as span]))
-
-;;; ── Column name conversion ────────────────────────────────────────────────
-
-(defn ->kebab-keyword
-  "Convert a column header string to a kebab-case keyword.
-  Drops parenthetical annotations: 'First Name (optional)' → :first-name"
-  [s]
-  (-> s
-      (string/replace #"\s*\([^\)]+\)\s*" " ")
-      string/trim
-      string/lower-case
-      (string/replace #"[^a-z0-9]+" "-")
-      (string/replace #"^-+|-+$" "")
-      keyword))
+    [camel-snake-kebab.core :as csk]
+    [clojure.string :as string]
+    [gsheetplus.cell :as cell]
+    [gsheetplus.core :as core]
+    [steffan-westcott.clj-otel.api.trace.span :as span]))
 
 ;;; ── Stop/start row markers ────────────────────────────────────────────────
 
@@ -64,7 +51,7 @@
         start-row-idx (+ (count part1) blank-count)]
     [(->> part1
           (remove (fn [[_ v & _]] (nil-or-blank? v)))
-          (map (fn [[k v & _]] [(->kebab-keyword (str k)) v]))
+          (map (fn [[k v & _]] [(csk/->kebab-case-keyword (str k)) v]))
           (into {}))
      (drop-while #(nil-or-blank? (first %)) part2)
      start-row-idx]))
@@ -74,10 +61,10 @@
 (defn headers-from-row
   "Parse a raw header row (vector of string-or-nil) into a vector of keywords.
   Options:
-    :column-name-fn   - fn to convert header strings (default ->kebab-keyword)
+    :column-name-fn   - fn to convert header strings (default csk/->kebab-case-keyword)
     :keep-leading-blanks - when true, preserve leading nil headers for alignment"
   [headers-raw & [{:keys [column-name-fn keep-leading-blanks]
-                   :or   {column-name-fn ->kebab-keyword}}]]
+                   :or   {column-name-fn csk/->kebab-case-keyword}}]]
   (cond->>
    (->> (if keep-leading-blanks
           (drop-while nil-or-blank? headers-raw)
@@ -90,6 +77,23 @@
         (map column-name-fn))
     keep-leading-blanks
     (concat (repeat (count (take-while nil-or-blank? headers-raw)) nil))))
+
+#_(defn headers-from-row
+  [headers-raw & [{:keys [keep-leading-blanks] :as options}]]
+  (cond->>
+    (->> (if keep-leading-blanks
+           (drop-while lang/nil-or-blank? headers-raw)
+           headers-raw)
+         (take-while (complement nil?))
+         (map str)
+         ; string/blank? would handle nils, but we must make sure everything is a string first
+         (take-while (complement lang/nil-or-blank?))
+         (map #(string/replace % #"\s*\([^\)]+\)\s*" " "))
+         (map string/trim)
+         (map csk/->kebab-case-keyword))
+    keep-leading-blanks
+    (concat
+      (repeat (count (take-while lang/nil-or-blank? headers-raw)) nil))))
 
 ;;; ── Row → record ──────────────────────────────────────────────────────────
 
@@ -150,7 +154,7 @@
                                  (-> a
                                      (string/replace #"\s*\([^\)]+\)\s*" " ")
                                      string/trim
-                                     ->kebab-keyword))]
+                                     csk/->kebab-case-keyword))]
             [new-section nil (assoc acc new-section [])]
             (if headers
               [section-name
@@ -252,7 +256,7 @@
   `sheet` can be a sheet title string, a numeric sheet-id, or a full gsheet URL.
 
   Options:
-    :column-name-fn    - header string → keyword (default ->kebab-keyword)
+    :column-name-fn    - header string → keyword (default csk/->kebab-case-keyword)
     :prune-start?      - drop rows before /START marker
     :drop-rows         - drop the first N rows
     :filter-fn         - keep only records matching this predicate
@@ -266,7 +270,7 @@
   ([service spreadsheet-id sheet options]
    (let [{:keys [prune-start? drop-rows filter-fn row-idx?
                  stop-on-blank-row? column-name-fn]
-          :or   {column-name-fn ->kebab-keyword}} options]
+          :or   {column-name-fn csk/->kebab-case-keyword}} options]
      (span/with-span! ["gsheetplus/read-single-table"
                        {:spreadsheet.id spreadsheet-id :sheet (str sheet)}]
        (let [sheet-title (resolve-sheet-title service spreadsheet-id sheet)
@@ -292,7 +296,7 @@
   Options: :prune-start?, :filter-fn, :row-idx?, :column-name-fn"
   [service spreadsheet-id sheet-name & [{:keys [prune-start? filter-fn row-idx?
                                                 column-name-fn]
-                                         :or   {column-name-fn ->kebab-keyword}
+                                         :or   {column-name-fn csk/->kebab-case-keyword}
                                          :as   options}]]
   (span/with-span! ["gsheetplus/read-single-table-with-info"
                     {:spreadsheet.id spreadsheet-id :sheet.name sheet-name}]
