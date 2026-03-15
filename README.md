@@ -36,7 +36,7 @@ Credential retrieval is the caller's responsibility. You supply an `InputStream`
   
 ### Installation 
 
-[![Clojars Project](https://img.shields.io/clojars/v/io.github.mlimotte/gsheetplus.svg)]
+[![Clojars Project](https://img.shields.io/clojars/v/io.github.mlimotte/gsheetplus.svg)](https://clojars.org/io.github.mlimotte/gsheetplus)
 
 ### Build a service
 
