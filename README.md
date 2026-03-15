@@ -34,6 +34,9 @@ Credential retrieval is the caller's responsibility. You supply an `InputStream`
 * Create a Key for your service account, as a JSON file. Pass these creds to the gsheet api. 
   (Hint: click the three dots next to the service account)
   
+### Installation 
+
+[![Clojars Project](https://img.shields.io/clojars/v/io.github.mlimotte/gsheetplus.svg)]
 
 ### Build a service
 
