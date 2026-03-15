@@ -1,7 +1,8 @@
 (ns gsheetplus.table-test
   (:require
-   [clojure.test :refer [deftest is are testing]]
-   [gsheetplus.table :as table]))
+    [clojure.string :as string]
+    [clojure.test :refer [deftest is are testing]]
+    [gsheetplus.table :as table]))
 
 ;;; ── ->kebab-keyword ───────────────────────────────────────────────────────
 
@@ -10,15 +11,15 @@
 
 (deftest test-kebab-keyword-parenthetical
   (are [input expected] (= expected (table/->kebab-keyword input))
-    "Unit Price (USD)"     :unit-price
-    "Name (optional)"      :name
-    "Column A (required)"  :column-a))
+                        "Unit Price (USD)" :unit-price
+                        "Name (optional)" :name
+                        "Column A (required)" :column-a))
 
 (deftest test-kebab-keyword-special-chars
   (are [input expected] (= expected (table/->kebab-keyword input))
-    "A/B Test"     :a-b-test
-    "foo--bar"     :foo-bar
-    "  spaces  "   :spaces))
+                        "A/B Test" :a-b-test
+                        "foo--bar" :foo-bar
+                        "  spaces  " :spaces))
 
 ;;; ── headers-from-row ──────────────────────────────────────────────────────
 
@@ -56,27 +57,89 @@
 ;;; ── info-params ───────────────────────────────────────────────────────────
 
 (deftest test-info-params-basic
-  (let [raw   [["Title" "My Sheet"] ["Version" "2"] [] ["Name" "Age"]]
+  (let [raw [["Title" "My Sheet"] ["Version" "2"] [] ["Name" "Age"]]
         [info remaining _] (table/info-params raw)]
     (is (= {:title "My Sheet" :version "2"} info))
     (is (= [["Name" "Age"]] remaining))))
 
 (deftest test-info-params-skips-blank-values
-  (let [raw   [["Key" ""] ["Other" "val"] []]
+  (let [raw [["Key" ""] ["Other" "val"] []]
         [info _ _] (table/info-params raw)]
     (is (not (contains? info :key)))
     (is (= "val" (:other info)))))
+
+;;; ── blocks, sections ─────────────────────────────────────────-────────────
+
+(deftest test-blocks
+  (is (= (table/blocks [["foo" "bar" "baz"]
+                        [nil "other"]
+                        ["A" "a" nil]
+                        ["a" "a"]
+                        ["a2" "a2"]
+                        ["B"]
+                        ["b" "b"]
+                        [nil]]
+                       ["A" "B" "C"])
+         [[["A" "a" nil]
+           ["a" "a"]
+           ["a2" "a2"]]
+          [["B"]
+           ["b" "b"]
+           [nil]]])))
+
+(def sample-raw-data [["foo" "bar" "baz"]
+                      ["apple" nil]
+                      ["x" 1 "X"]
+                      ["honda" "ford" nil nil]
+                      [nil " " nil]
+                      ["a" "b" "c (junk)" "d  " "e (foo) e"] ; header row, index = 5
+
+                      ["A" nil nil]                         ; start of section data, index 7 (drop 6)
+                      ["" "A.a1" nil "A.a1.d"]
+                      ["" "" "A.a1.c.1" nil]
+                      ["" "" "A.a1.c.2" "A.a1.d.2"]
+                      [nil nil nil nil]
+
+                      ["B" nil "B.c"]
+                      ["" "B.b1" nil "B.b1.d"]
+                      ["" "" "B.b1.c.1" nil]
+                      ["" "" nil "B.b1.d.2"]
+                      ["" "" "B.b1.c.3" "B.b1.d.3"]
+                      ["" "B.b2" nil "B.b2.d"]
+                      ["" "" "B.b2.c.1" "B.b2.d.1"]])
+
+(deftest test-split-sections
+  (let [headers (table/headers-from-row (nth sample-raw-data 5))
+        x (table/split-sections (drop 6 sample-raw-data)
+                                headers
+                                {:section-fn       (fn [record _] (some-> record :a string/trim))
+                                 :subsection-fn    (fn [record _] (and (not (:a record))
+                                                                       (some-> record :b string/trim)))
+                                 :record-filter-fn :d})]
+    (is (= x
+           [{:a            "A"
+             :section-name "A"
+             :records      [{:b       "A.a1" :d "A.a1.d" :section-name "A" :subsection-name "A.a1"
+                             :records [{:c "A.a1.c.2" :d "A.a1.d.2" :section-name "A" :subsection-name "A.a1"}]}]}
+            {:a            "B"
+             :c            "B.c"
+             :section-name "B"
+             :records      [{:section-name "B" :subsection-name "B.b1" :b "B.b1" :d "B.b1.d"
+                             :records      [{:section-name "B" :subsection-name "B.b1" :d "B.b1.d.2"}
+                                            {:section-name "B" :subsection-name "B.b1" :c "B.b1.c.3" :d "B.b1.d.3"}]}
+                            {:section-name "B" :subsection-name "B.b2" :b "B.b2" :d "B.b2.d"
+                             :records      [{:section-name "B" :subsection-name "B.b2" :c "B.b2.c.1" :d "B.b2.d.1"}]}]}]))))
 
 ;;; ── fill-down ─────────────────────────────────────────────────────────────
 
 (deftest test-fill-down-propagates
   (let [records [{:a "x" :b "1"} {:b "2"} {:b "3"}]
-        result  (table/fill-down [:a] false records)]
+        result (table/fill-down [:a] false records)]
     (is (= [{:a "x" :b "1"} {:a "x" :b "2"} {:a "x" :b "3"}] result))))
 
 (deftest test-fill-down-no-overwrite
   (let [records [{:a "x"} {:a "y"}]
-        result  (table/fill-down [:a] false records)]
+        result (table/fill-down [:a] false records)]
     (is (= [{:a "x"} {:a "y"}] result))))
 
 (deftest test-fill-down-required-throws
