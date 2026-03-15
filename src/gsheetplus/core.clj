@@ -11,8 +11,7 @@
             AddSheetRequest AutoFillRequest BatchUpdateSpreadsheetRequest
             CopySheetToAnotherSpreadsheetRequest DeleteDimensionRequest DeleteSheetRequest
             DimensionRange GridRange InsertDimensionRequest CopyPasteRequest Request
-            SheetProperties SourceAndDestination UpdateCellsRequest UpdateSheetPropertiesRequest
-            ValueRange)))
+            SheetProperties SourceAndDestination UpdateCellsRequest UpdateSheetPropertiesRequest)))
 
 ;;; ── Error helpers ─────────────────────────────────────────────────────────
 
@@ -109,6 +108,33 @@
       {:spreadsheet-id spreadsheet-id
        :sheet-id       (when sheet-id (Long/parseLong sheet-id))})))
 
+;;; ── Sheet structure ───────────────────────────────────────────────────────
+
+(defn info
+  "Return the full spreadsheets.get response for `spreadsheet-id`."
+  [^Sheets service spreadsheet-id]
+  (-> service .spreadsheets (.get spreadsheet-id) .execute))
+
+(defn sheet-info
+  "Return the raw sheet map for `sheet-id` within `spreadsheet-id`, or nil."
+  [service spreadsheet-id sheet-id]
+  (->> (get (info service spreadsheet-id) "sheets")
+       (some (fn [{:strs [properties] :as s}]
+               (when (= sheet-id (get properties "sheetId")) s)))))
+
+(defn find-sheet-id
+  "Return the numeric sheet ID for `sheet-title` within `spreadsheet-id`, or nil."
+  [^Sheets service spreadsheet-id sheet-title]
+  (->> (get (info service spreadsheet-id) "sheets")
+       (some (fn [{:strs [properties]}]
+               (when (= sheet-title (get properties "title"))
+                 (get properties "sheetId"))))))
+
+(defn get-sheet-name
+  "Return the title string for `sheet-id` in `spreadsheet-id`, or nil."
+  [^Sheets service spreadsheet-id sheet-id]
+  (get-in (sheet-info service spreadsheet-id sheet-id) ["properties" "title"]))
+
 ;;; ── Low-level reads ───────────────────────────────────────────────────────
 
 (defn- get-cells*
@@ -151,45 +177,58 @@
 
 (defn exec!
   "Execute `requests` (sequence of Request) as a single batchUpdate.
-  Retries up to 2 times on 429. Wrapped in an OTEL span."
-  ([service spreadsheet-id requests]
-   (exec! service spreadsheet-id requests 0))
-  ([^Sheets service spreadsheet-id requests retry]
-   (span/with-span! ["gsheetplus/exec!" {:spreadsheet.id spreadsheet-id
-                                         :request.count  (count requests)}]
-     (try
-       (-> service
-           .spreadsheets
-           (.batchUpdate spreadsheet-id
-                         (doto (BatchUpdateSpreadsheetRequest.)
-                           (.setRequests requests)))
-           .execute)
-       (catch GoogleJsonResponseException e
-         (if (and (rate-limit-error? e) (<= retry 2))
-           (do
-             (log/warn e "Caught 429 (RATE LIMIT), retrying...")
-             (Thread/sleep (* 1000 65))
-             (exec! service spreadsheet-id requests (inc retry)))
-           (throw e)))))))
+  Retries up to 2 times on 429 with exponential backoff. Wrapped in an OTEL span."
+  [^Sheets service spreadsheet-id requests]
+  (span/with-span! ["gsheetplus/exec!" {:spreadsheet.id spreadsheet-id
+                                        :request.count  (count requests)}]
+    (do-with-retries
+     {:max-retries      2
+      :retry-delay      [:random-exp-backoff :base 10000 :+/- 0.25 :max 120000]
+      :retryable-error? rate-limit-error?
+      :log-level        :warn
+      :message          "Caught 429 (RATE LIMIT), retrying"}
+     #(-> service
+          .spreadsheets
+          (.batchUpdate spreadsheet-id
+                        (doto (BatchUpdateSpreadsheetRequest.)
+                          (.setRequests requests)))
+          .execute))))
 
-(declare get-sheet-name)
-(defn append!
-  "Append `data-rows` to the sheet identified by `sheet-id`. No-op for empty rows.
-  Values are passed as raw strings/numbers (USER_ENTERED input option).
-  Wrapped in an OTEL span."
+(declare update-grid-request insert-dimension-request)
+(defn append-rows!
+  "Appends rows to a specific sheet using the CellDataValue protocol for precise
+  type encoding — dates are written as serial numbers with number formats,
+  booleans and nils are encoded explicitly, and callers can extend CellDataValue
+  for custom types. Appends after the last non-blank row (determined client-side
+  via a preflight read). Breaks down requests into batches of ~10k cells. If any
+  row is wider than the sheet's current column count, inserts the necessary
+  additional columns first.
+
+  `data-rows` is a sequence of sequences of CellDataValue-compatible values.
+  `sheet-id` is the numeric sheet ID."
   [^Sheets service spreadsheet-id sheet-id data-rows]
   (when (seq data-rows)
-    (span/with-span! ["gsheetplus/append!" {:spreadsheet.id spreadsheet-id
-                                            :sheet.id       sheet-id}]
-      (let [sheet-name (get-sheet-name service spreadsheet-id sheet-id)]
-        (-> service
-            .spreadsheets
-            .values
-            (.append spreadsheet-id sheet-name
-                     (doto (ValueRange.)
-                       (.setValues (mapv vec data-rows))))
-            (.setValueInputOption "USER_ENTERED")
-            .execute)))))
+    (span/with-span! ["gsheetplus/append-rows!" {:spreadsheet.id spreadsheet-id
+                                                 :sheet.id       sheet-id}]
+      (let [sheet-info' (sheet-info service spreadsheet-id sheet-id)
+            sheet-name (get-in sheet-info' ["properties" "title"])
+            col-count (get-in sheet-info' ["properties" "gridProperties" "columnCount"])
+            max-width (reduce (fn [m row] (max m (count row))) 0 data-rows)
+            _ (when (> max-width col-count)
+                (exec! service spreadsheet-id
+                       [(insert-dimension-request sheet-id "COLUMNS" false
+                                                  col-count (- max-width col-count))]))
+            col-count (max col-count max-width)
+            existing (or (gsheet-get-values service spreadsheet-id sheet-name) [])
+            start-row (count existing)
+            rows-per-batch (max 1 (quot 10000 col-count))
+            batches (partition-all rows-per-batch data-rows)]
+        (doseq [[i batch] (map-indexed vector batches)]
+          (exec! service spreadsheet-id
+                 [(update-grid-request sheet-id
+                                       (+ start-row (* i rows-per-batch))
+                                       0
+                                       (vec batch))]))))))
 
 ;;; ── Request builders ──────────────────────────────────────────────────────
 
@@ -324,28 +363,7 @@
          [(insert-rows-request sheet-id (or inherit-from-before false) row (count vector-row-data))
           (update-grid-request sheet-id row col vector-row-data)]))
 
-;;; ── Sheet structure ───────────────────────────────────────────────────────
-
-(defn info
-  "Return the full spreadsheets.get response for `spreadsheet-id`."
-  [^Sheets service spreadsheet-id]
-  (-> service .spreadsheets (.get spreadsheet-id) .execute))
-
-(defn find-sheet-id
-  "Return the numeric sheet ID for `sheet-title` within `spreadsheet-id`, or nil."
-  [^Sheets service spreadsheet-id sheet-title]
-  (->> (get (info service spreadsheet-id) "sheets")
-       (some (fn [{:strs [properties]}]
-               (when (= sheet-title (get properties "title"))
-                 (get properties "sheetId"))))))
-
-(defn get-sheet-name
-  "Return the title string for `sheet-id` in `spreadsheet-id`, or nil."
-  [^Sheets service spreadsheet-id sheet-id]
-  (->> (get (info service spreadsheet-id) "sheets")
-       (some (fn [{:strs [properties]}]
-               (when (= sheet-id (get properties "sheetId"))
-                 (get properties "title"))))))
+;;; ── Sheet management ──────────────────────────────────────────────────────
 
 (defn add-sheet
   "Add a new tab with `title` to `spreadsheet-id`. Returns the API response."
@@ -357,8 +375,6 @@
                    (.setProperties
                     (-> (SheetProperties.)
                         (.setTitle title))))))]))
-
-;;; ── Sheet management ──────────────────────────────────────────────────────
 
 (defn delete-sheet
   "Delete the sheet tab identified by `sheet-id` from `spreadsheet-id`."
