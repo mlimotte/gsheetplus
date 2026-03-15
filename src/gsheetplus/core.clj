@@ -368,13 +368,17 @@
 (defn add-sheet
   "Add a new tab with `title` to `spreadsheet-id`. Returns the API response."
   [^Sheets service spreadsheet-id title]
-  (exec! service spreadsheet-id
-         [(-> (Request.)
-              (.setAddSheet
-               (-> (AddSheetRequest.)
-                   (.setProperties
-                    (-> (SheetProperties.)
-                        (.setTitle title))))))]))
+  (let [response (exec! service spreadsheet-id
+                        [(-> (Request.)
+                             (.setAddSheet
+                               (-> (AddSheetRequest.)
+                                   (.setProperties
+                                     (-> (SheetProperties.)
+                                         (.setTitle title))))))])]
+    (-> response
+        (get "replies")
+        (first)
+        (get-in ["addSheet" "properties"]))))
 
 (defn delete-sheet
   "Delete the sheet tab identified by `sheet-id` from `spreadsheet-id`."

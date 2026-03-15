@@ -2,7 +2,7 @@
   (:require [clojure.tools.build.api :as b]))
 
 (def lib 'io.github.mlimotte/gsheetplus)
-(def version "0.9.3")
+(def version "0.9.4")
 (def class-dir "target/classes")
 (def basis (b/create-basis {:project "deps.edn"}))
 (def lib-jar-file (format "target/%s-%s.jar" (name lib) version))
