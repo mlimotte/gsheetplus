@@ -4,7 +4,7 @@
   (:require [clojure.tools.logging :as log])
   (:import (com.google.api.client.googleapis.auth.oauth2 GoogleCredential)
            (com.google.api.client.googleapis.javanet GoogleNetHttpTransport)
-           (com.google.api.client.json.jackson2 JacksonFactory)
+           (com.google.api.client.json.gson GsonFactory)
            (com.google.api.services.sheets.v4 Sheets Sheets$Builder SheetsScopes)
            (com.google.api.services.drive DriveScopes)
            (java.io InputStream)))
@@ -25,7 +25,7 @@
   [^InputStream creds-stream]
   (log/info "Building Google Sheets service")
   (let [transport (GoogleNetHttpTransport/newTrustedTransport)
-        factory (JacksonFactory/getDefaultInstance)
+        factory (GsonFactory/getDefaultInstance)
         creds (credential-with-scopes creds-stream transport factory SCOPES)]
     (-> (Sheets$Builder. transport factory creds)
         (.setApplicationName "gsheetplus")
