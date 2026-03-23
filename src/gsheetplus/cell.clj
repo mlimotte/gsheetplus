@@ -2,7 +2,8 @@
   "Cell data protocol and conversions between Clojure values and Google Sheets API types.
   Extend CellDataValue for custom write-time type coercions."
   (:require [java-time.api :as jtime])
-  (:import (com.google.api.services.sheets.v4.model
+  (:import (clojure.lang Keyword)
+           (com.google.api.services.sheets.v4.model
              CellData CellFormat ExtendedValue NumberFormat RowData)
            java.time.temporal.ChronoUnit))
 
@@ -55,6 +56,12 @@
     (doto (CellData.)
       (.setUserEnteredValue
         (.setBoolValue (ExtendedValue.) b))))
+
+  Keyword
+  (->cell-data [k]
+    (doto (CellData.)
+      (.setUserEnteredValue
+        (.setStringValue (ExtendedValue.) (str k)))))
 
   nil
   (->cell-data [_]

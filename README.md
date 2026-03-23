@@ -254,10 +254,10 @@ clj -M:test
 ## Building and Releasing
 
 ```bash
-# Build the JAR
-clj -T:build jar
 
 # Build and deploy to Clojars (requires CLOJARS_USERNAME and CLOJARS_PASSWORD env vars)
+
+# First update the version number in build.clj. If you forget, you will be warned to do so.
 clj -T:build deploy
 ```
 
