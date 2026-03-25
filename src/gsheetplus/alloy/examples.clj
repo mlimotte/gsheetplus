@@ -1,4 +1,4 @@
-(ns skipp.alloy.examples)
+(ns gsheetplus.alloy.examples)
 
 (def context-map1
   {:x            1

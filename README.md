@@ -2,6 +2,8 @@
 
 A clean Clojure library for reading and writing Google Sheets. Designed for eventual extraction as a standalone library.
 
+Also includes a powerful template (or Document Generation) capability for Spreadsheets ("Alloy").
+
 ## Namespaces
 
 | Namespace | Purpose |
@@ -10,6 +12,7 @@ A clean Clojure library for reading and writing Google Sheets. Designed for even
 | `gsheetplus.cell` | Cell data protocol and type conversions (read and write) |
 | `gsheetplus.core` | Low-level API: reading ranges, batch updates, sheet management |
 | `gsheetplus.table` | High-level table reading, header parsing, data transformation |
+| `gsheetplus.alloy.*` | Template engine: render Jinja-like templates in Google Sheets — see [doc/alloy.md](doc/alloy.md) |
 
 ## Authentication
 
@@ -266,3 +269,5 @@ The version and artifact coordinates are set in `build.clj`.
 ## Thanks
 
 A big thank you to the team at SparkFund for [google-apps-clj](https://github.com/SparkFund/google-apps-clj). It was a wonderfully designed library that I relied on heavily for years. While it is no longer actively maintained, it laid an excellent foundation and directly inspired this project. `gsheetplus` extends that work with a richer set of higher-level functions for reading and writing sheets.
+
+Thanks also to Mark and Alex Engelberg for [Instaparse](https://github.com/Engelberg/instaparse), the excellent parsing library that powers the Alloy template engine.

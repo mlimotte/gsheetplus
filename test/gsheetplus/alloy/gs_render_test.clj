@@ -1,11 +1,11 @@
-(ns skipp.alloy.gs-render-test
+(ns gsheetplus.alloy.gs-render-test
   (:require
    [clojure.test :refer :all]
    [clojure.zip :as z]
-   [skipp.alloy.gs-render :refer :all]
-   [skipp.alloy.render :as render]
-   [skipp.alloy.examples :refer [context-map1]]
-   [skipp.alloy.grammar :as g]))
+   [gsheetplus.alloy.gs-render :refer :all]
+   [gsheetplus.alloy.render :as render]
+   [gsheetplus.alloy.examples :refer [context-map1]]
+   [gsheetplus.alloy.grammar :as g]))
 
 (deftest test-generate-instructions
   (let [zipper (z/vector-zip [["{% for inner in l3 %}"] ; [10, 20]

@@ -1,8 +1,8 @@
-(ns skipp.alloy.grammar
+(ns gsheetplus.alloy.grammar
   (:require
    [clojure.string :as string]
    [clojure.zip :as z]
-   [taoensso.timbre :as timbre]
+   [clojure.tools.logging :as log]
    [instaparse.core :as insta])
   (:import
    java.text.NumberFormat))
@@ -17,7 +17,7 @@
 (defn ast-node?
   [x]
   ;; Using this logic instead of `instance?`, to facilitate testing in the REPL
-  (and x (= (-> x type .getName) "skipp.alloy.grammar.ASTNode")))
+  (and x (= (-> x type .getName) "gsheetplus.alloy.grammar.ASTNode")))
 
 (def grammar
   "
@@ -176,7 +176,7 @@
 
 (defn parse-struct
   [parser zipper]
-  (timbre/info "Parse structure (alloy)")
+  (log/info "Parse structure (alloy)")
   (z/root
    (zipper-map
     (fn [loc v]

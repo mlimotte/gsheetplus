@@ -1,8 +1,8 @@
-(ns skipp.alloy.gs-render
+(ns gsheetplus.alloy.gs-render
   (:require
-    [gsheetplus.core :as g+core]
-    [taoensso.timbre :as timbre]
-    [skipp.alloy.render :as render]))
+   [gsheetplus.core :as g+core]
+   [clojure.tools.logging :as log]
+   [gsheetplus.alloy.render :as render]))
 
 (def row (comp first :path))
 (def col (comp second :path))
@@ -15,7 +15,7 @@
     (g+core/update-cells-request sheet-id row-idx col-idx [v])))
 
 (defmulti instruc->gsreq
-          (fn [sheet-id instruction] (:instruct instruction)))
+  (fn [sheet-id instruction] (:instruct instruction)))
 
 (defn delete-rows-instruct
   [start-rowidx & [end-exclusive-rowidx]]
@@ -77,56 +77,56 @@
   "Generate instructions for interpretation by `instruc->gsreq`"
   [items loop-indices row-offset]
   (mapcat
-    (fn [{:keys [op collector value] :as item}]
-      (let [rowidx (+ (row item) row-offset)]
-        (cond
-          (#{::render/eval-error} value)
-          [(error-message (row item) rowidx (col item) (:err-msg item))]
+   (fn [{:keys [op collector value] :as item}]
+     (let [rowidx (+ (row item) row-offset)]
+       (cond
+         (#{::render/eval-error} value)
+         [(error-message (row item) rowidx (col item) (:err-msg item))]
 
-          (= op :FOR)
-          (let [end-rowidx (+ (:end-token-row item) row-offset)
-                num-rows (dec (- end-rowidx rowidx))
-                num-blocks (:loop-count item)
-                children (:children item)]
-            (-> []
-                (conj (delete-rows-instruct rowidx))
-                (concat
-                  (mapcat
-                    (fn [idx]
-                      (generate-instructions* children
-                                              (conj loop-indices idx)
-                                              (+ row-offset (* idx num-rows))))
-                    (range num-blocks)))
-                vec                                         ; so subsequent conj go at the end
-                (cond->
-                  (zero? num-blocks)
-                  (conj (delete-rows-instruct (inc rowidx) end-rowidx))
-                  (pos? num-blocks)
-                  (conj (dupe-rows-instruct (inc rowidx) end-rowidx num-blocks)))))
+         (= op :FOR)
+         (let [end-rowidx (+ (:end-token-row item) row-offset)
+               num-rows (dec (- end-rowidx rowidx))
+               num-blocks (:loop-count item)
+               children (:children item)]
+           (-> []
+               (conj (delete-rows-instruct rowidx))
+               (concat
+                (mapcat
+                 (fn [idx]
+                   (generate-instructions* children
+                                           (conj loop-indices idx)
+                                           (+ row-offset (* idx num-rows))))
+                 (range num-blocks)))
+               vec                                         ; so subsequent conj go at the end
+               (cond->
+                (zero? num-blocks)
+                 (conj (delete-rows-instruct (inc rowidx) end-rowidx))
+                 (pos? num-blocks)
+                 (conj (dupe-rows-instruct (inc rowidx) end-rowidx num-blocks)))))
 
-          (= value ::render/remove-row)
-          [(delete-rows-instruct rowidx)]
+         (= value ::render/remove-row)
+         [(delete-rows-instruct rowidx)]
 
-          (#{::render/no-eval ::render/no-value} value)
-          [(update-instruct rowidx (col item) "")]
+         (#{::render/no-eval ::render/no-value} value)
+         [(update-instruct rowidx (col item) "")]
 
-          (and (= op :VALUE))                               ; no need to update a literal/static value
-          []
+         (and (= op :VALUE))                               ; no need to update a literal/static value
+         []
 
-          (not (nil? value))
-          [(update-instruct rowidx (col item) value)]
+         (not (nil? value))
+         [(update-instruct rowidx (col item) value)]
 
-          (not (empty? collector))
-          (let [x (get-in collector loop-indices)]
-            (if (#{::render/eval-error} x)
-              [(error-message (row item) rowidx (col item) (:err-msg item))]
-              [(update-instruct rowidx (col item) x)])))))
+         (not (empty? collector))
+         (let [x (get-in collector loop-indices)]
+           (if (#{::render/eval-error} x)
+             [(error-message (row item) rowidx (col item) (:err-msg item))]
+             [(update-instruct rowidx (col item) x)])))))
 
-    items))
+   items))
 
 (defn generate-instructions
   [items]
-  (timbre/info "Starting generate-instructions pass...")
+  (log/info "Starting generate-instructions pass...")
   ; Note: `reverse` so that Instructions are processed from bottom up. This way, deleting a
   ;       row near the top of the file does not impact how we process rows below it
   ;       (since those rows have already been processed).

@@ -1,13 +1,11 @@
-(ns skipp.alloy.render-test
+(ns gsheetplus.alloy.render-test
   (:require
    [clojure.test :refer :all]
    [clojure.zip :as z]
-   [taoensso.timbre :as timbre]
-   [skipp.alloy.render :refer :all]
-   [skipp.alloy.examples :refer [context-map1]]
-   [skipp.alloy.grammar :as g]
    [clojure.string :as string]
-   [skipp.util.lang :as lang])
+   [gsheetplus.alloy.render :refer :all]
+   [gsheetplus.alloy.examples :refer [context-map1]]
+   [gsheetplus.alloy.grammar :as g])
   (:import
    clojure.lang.ExceptionInfo))
 
@@ -72,15 +70,14 @@
          ; - 10 2 7
          1))
   ;; REF with filter that is NOT DEFINED
-  (with-redefs [timbre/-log! (constantly true)]
-    (let [result (evaluate
-                  sample-extensions context-map1 nil
-                  (g/mkastnode :EXPR [0 0]
-                               :expr (list '+ 1 (g/mkastnode
-                                                 :REF [0 0] :args [:l3 0]
-                                                 :filters [{:op :doesnotexist :args [7]}]))))]
-      (is (eval-error? result))
-      (is (re-find #"Render handle failure.*doesnotexist" (:err-msg result)))))
+  (let [result (evaluate
+                sample-extensions context-map1 nil
+                (g/mkastnode :EXPR [0 0]
+                             :expr (list '+ 1 (g/mkastnode
+                                               :REF [0 0] :args [:l3 0]
+                                               :filters [{:op :doesnotexist :args [7]}]))))]
+    (is (eval-error? result))
+    (is (re-find #"Render handle failure.*doesnotexist" (:err-msg result))))
   ;; EXPR
   (is (= (evaluate sample-extensions context-map1 nil (g/mkastnode :EXPR [0 0] :expr '(+ 1 3)))
          4))
@@ -152,7 +149,7 @@
                          nil
                          (g/mkastnode :CTAG [0 0] :ctag :count-rows :end? true)
                          loc)]
-      (is (= (:value result) :skipp.alloy.render/no-eval)))))
+      (is (= (:value result) :gsheetplus.alloy.render/no-eval)))))
 
 (deftest test-handle-if-else-rows-block
   (let [state (new-render-state context-map1)
@@ -167,7 +164,7 @@
                   loc)
           {:keys [context-map]}
           new-state]
-      (is (= (-> context-map :skipp.alloy.render/test)) 30)
+      (is (= (-> context-map :gsheetplus.alloy.render/test)) 30)
       (is (= (dissoc new-state :context-map)
              {:level           :IF
               :eval?           true
@@ -274,12 +271,12 @@
                              :for/remaining '[a b]
                              :for/loop-var :i
                              :for/loop-indices [0])
-                      (assoc-in [:context-map :skipp.alloy.render/loop-iter] 0))
+                      (assoc-in [:context-map :gsheetplus.alloy.render/loop-iter] 0))
                   nil
                   (g/mkastnode :ENDFOR [2 0])
                   loc)]
       (is (= (-> new-state :context-map :i)) 'a)
-      (is (= (-> new-state :context-map :skipp.alloy.render/loop-iter)) 1)
+      (is (= (-> new-state :context-map :gsheetplus.alloy.render/loop-iter)) 1)
       (is (= (dissoc new-state :context-map)
              {:level            :FOR
               :bookmark         [0 0]
@@ -300,7 +297,7 @@
                              :bookmark [0 0]
                              :for/remaining '[]
                              :for/loop-indices [1])
-                      (assoc-in [:context-map :skipp.alloy.render/loop-iter] 0))
+                      (assoc-in [:context-map :gsheetplus.alloy.render/loop-iter] 0))
                   nil
                   (g/mkastnode :ENDFOR [2 0])
                   loc)]
@@ -340,7 +337,7 @@
                     (render-ast context-map1
                                 (update sample-extensions :filters
                                         assoc :default (fn [v arg1]
-                                                         (if (lang/nil-or-blank? v) arg1 v)))))]
+                                                         (if (string/blank? v) arg1 v)))))]
     (is (= (-> result first first first :value) "-"))))
 
 (deftest test-render-ast-with-inline-ctag
@@ -415,8 +412,8 @@
                 (take 1)
                 first
                 (map #(map :value %)))
-           [[:skipp.alloy.render/no-eval]
-            [:skipp.alloy.render/no-eval]]))))
+           [[:gsheetplus.alloy.render/no-eval]
+            [:gsheetplus.alloy.render/no-eval]]))))
 
 (deftest test-render-ast-nested-eval-mixed
   (let [zipper (z/vector-zip [["{% for v in f-val %}"] ; [true false]
@@ -430,16 +427,16 @@
                 (take 1)
                 first)
            [(list (g/mkastnode :REF [2 0] :args [:v] :filters []
-                               :collector ['a :skipp.alloy.render/no-eval 'c]))
+                               :collector ['a :gsheetplus.alloy.render/no-eval 'c]))
             (list (g/mkastnode :VALUE [2 1] :value "foo"
-                               :collector ["foo" :skipp.alloy.render/no-eval "foo"]))]))))
+                               :collector ["foo" :gsheetplus.alloy.render/no-eval "foo"]))]))))
 
 (deftest test-render-eval-error-in-if
   (let [zipper   (z/vector-zip [["{%if l3|badbad%}YES{%endif%}"]])
         parsed   (g/parse-struct g/the-parser zipper)
         rendered (render-ast context-map1 nil parsed)]
     (is (= (map :value (get-in rendered [0 0]))
-           [:skipp.alloy.render/eval-error "YES" :skipp.alloy.render/no-value]))))
+           [:gsheetplus.alloy.render/eval-error "YES" :gsheetplus.alloy.render/no-value]))))
 
 (deftest test-render-simple-if-not=
   (let [zipper   (z/vector-zip [["{%if x!=2 %}YES{%endif%}"]])
@@ -481,10 +478,10 @@
   (is (= (str-join-collectors 1 [[[1 2] [3 4]] ["x" "y"]])
          ["[1 2]x" "[3 4]y"]))
 
-  ; 4 items in cell, loop1 len = 2, w/ empty values and :skipp.alloy.render/no-eval
+  ; 4 items in cell, loop1 len = 2, w/ empty values and :gsheetplus.alloy.render/no-eval
   (is (= (str-join-collectors 1 [[]
                                  ["YES" "OTHER"]
-                                 [1 :skipp.alloy.render/no-eval]
+                                 [1 :gsheetplus.alloy.render/no-eval]
                                  []])
          ["YES1" "OTHER"])))
 
@@ -497,10 +494,10 @@
     ["a" 10] "a10"
     ["a" " " "b"] "a b"
     ["a"] "a"
-    [:skipp.alloy.render/no-value "a"] "a"
-    [:skipp.alloy.render/no-value] ""
-    [:skipp.alloy.render/no-eval] ""
-    [:skipp.alloy.render/eval-error] :skipp.alloy.render/eval-error
+    [:gsheetplus.alloy.render/no-value "a"] "a"
+    [:gsheetplus.alloy.render/no-value] ""
+    [:gsheetplus.alloy.render/no-eval] ""
+    [:gsheetplus.alloy.render/eval-error] :gsheetplus.alloy.render/eval-error
     [] ""))
 
 (deftest test-row->items
@@ -515,9 +512,9 @@
                            (g/mkastnode :VALUE [0 0] :value 2)]])
            [(mk-item :MERGED-VALUE [0 0] "a2" nil)]))
     ; All no-value / no-eval entries
-    (is (= (row->items 0 [[(g/mkastnode :REF [0 0] :value :skipp.alloy.render/no-eval)
-                           (g/mkastnode :WITH [0 1] :value :skipp.alloy.render/no-value)]])
-           [(mk-item :REF [0 0] :skipp.alloy.render/remove-row nil)]))
+    (is (= (row->items 0 [[(g/mkastnode :REF [0 0] :value :gsheetplus.alloy.render/no-eval)
+                           (g/mkastnode :WITH [0 1] :value :gsheetplus.alloy.render/no-value)]])
+           [(mk-item :REF [0 0] :gsheetplus.alloy.render/remove-row nil)]))
     ; Multiple collectors in one cell
     (is (= (row->items 2 [[(g/mkastnode :VALUE [0 0] :collector [[1 1] [1 1] [1 1]])]
                           [(g/mkastnode :VALUE [0 1] :collector '[[d r] [m f] [s l]])
@@ -561,20 +558,21 @@
                                         (map->Item
                                          {:op        :MERGED-VALUE
                                           :path      [2 0]
-                                          :collector [:skipp.alloy.render/eval-error ""]})]})
+                                          :collector [:gsheetplus.alloy.render/eval-error ""]
+                                          :err-msg   "Render handle failure: Filter op (badfilter) not found in the extensions at (2 0)"})]})
             (map->Item {:op        :ENDFOR
                         :path      [3 0]
                         :collector nil
-                        :value     :skipp.alloy.render/remove-row})]))))
+                        :value     :gsheetplus.alloy.render/remove-row})]))))
 
-(deftest test-unroll-for-inline-if-with-complex-value
+(deftest test-unroll-for-inline-if-with-complex-value-2
   (let [zipper   (z/vector-zip [["{%if l3|badbad%}YES{%endif%}"]])
         rendered (render-ast context-map1 nil (g/parse-struct g/the-parser zipper))]
     (is (= (unroll rendered)
            [(map->Item {:op      :MERGED-VALUE
                         :err-msg "Render handle failure: Filter op (badbad) not found in the extensions at (0 0)"
                         :path    [0 0]
-                        :value   :skipp.alloy.render/eval-error})]))))
+                        :value   :gsheetplus.alloy.render/eval-error})]))))
 
 (deftest test-unroll-empty-for-loop
   (let [zipper   (z/vector-zip [["{% for q in empty %}"] ; [10, 20]
@@ -593,7 +591,7 @@
             (map->Item {:op        :ENDFOR
                         :path      [2 0]
                         :collector nil
-                        :value     :skipp.alloy.render/remove-row})]))))
+                        :value     :gsheetplus.alloy.render/remove-row})]))))
 
 (deftest test-unroll-for-loop
   (let [zipper   (z/vector-zip [["{% for q in l3 %}"] ; [10, 20]
@@ -612,7 +610,7 @@
             (map->Item {:op        :ENDFOR
                         :path      [2 0]
                         :collector nil
-                        :value     :skipp.alloy.render/remove-row})]))))
+                        :value     :gsheetplus.alloy.render/remove-row})]))))
 
 (deftest test-unroll-nested-for
   (let [zipper   (z/vector-zip [["{% for outer in l2 %}"] ; [a b c]
@@ -642,12 +640,12 @@
                                {:op        :ENDFOR
                                 :path      [3 0]
                                 :collector nil
-                                :value     :skipp.alloy.render/remove-row})]})
+                                :value     :gsheetplus.alloy.render/remove-row})]})
             (map->Item
              {:op        :ENDFOR
               :path      [4 0]
               :collector nil
-              :value     :skipp.alloy.render/remove-row})]))))
+              :value     :gsheetplus.alloy.render/remove-row})]))))
 
 (deftest test-unroll-for-inside-falsy-if
   (let [zipper   (z/vector-zip [["{% if 1 = 2 %}"] ; [a b c]
@@ -660,7 +658,7 @@
            [(map->Item {:op        :IF
                         :path      [0 0]
                         :collector nil
-                        :value     :skipp.alloy.render/remove-row})
+                        :value     :gsheetplus.alloy.render/remove-row})
             (map->Item {:op            :FOR
                         :path          [1 0]
                         :loop-count    nil ; Would be 2 for a truthy IF stmt
@@ -669,13 +667,13 @@
                                          {:op        :REF
                                           :path      [2 0]
                                           :collector nil
-                                          :value     :skipp.alloy.render/remove-row})]})
+                                          :value     :gsheetplus.alloy.render/remove-row})]})
             (map->Item
              {:op        :ENDFOR
               :path      [3 0]
               :collector nil
-              :value     :skipp.alloy.render/remove-row})
+              :value     :gsheetplus.alloy.render/remove-row})
             (map->Item {:op        :ENDIF
                         :path      [4 0]
                         :collector nil
-                        :value     :skipp.alloy.render/remove-row})]))))
+                        :value     :gsheetplus.alloy.render/remove-row})]))))

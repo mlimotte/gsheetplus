@@ -1,13 +1,13 @@
-(ns skipp.alloy.render
+(ns gsheetplus.alloy.render
   (:require
-    [clojure.string :as string]
-    [clojure.walk]
-    [clojure.zip :as z]
-    [taoensso.timbre :as timbre]
-    [skipp.alloy.grammar :as g]
-    [skipp.alloy.grammar :as grammar])
+   [clojure.string :as string]
+   [clojure.walk]
+   [clojure.zip :as z]
+   [clojure.tools.logging :as log]
+   [gsheetplus.alloy.grammar :as g]
+   [gsheetplus.alloy.grammar :as grammar])
   (:import
-    clojure.lang.ExceptionInfo))
+   clojure.lang.ExceptionInfo))
 
 (defn extend-size
   "Extend collection to be at least `target-count` in length. Extra values concatenated
@@ -30,7 +30,7 @@
 
 (defn rewind-to-bookmark
   [zipper bookmark]
-  (timbre/trace (str "Rewinding to " bookmark))
+  (log/trace (str "Rewinding to " bookmark))
   (loop [loc zipper]
     (let [loc-bookmark (:bookmark (z/node loc))]
       (cond
@@ -57,7 +57,7 @@
 
 (defn evaluate
   [extensions context-map level-stack x]
-  (timbre/trace (str "Evaluate " (type x) " " x))
+  (log/trace (str "Evaluate " (type x) " " x))
   (try
     (cond
       (and (g/ast-node? x) (= (:op x) :REF))
@@ -70,19 +70,19 @@
                       context-map (:args x))
             filters (map (fn [{fargs :args, opkey :op}]
                            #(apply
-                              (if (get-in extensions [:filters opkey])
-                                (get-in extensions [:filters opkey])
-                                (let [err (rc-error
-                                            x
-                                            "Filter op (%s) not found in the extensions"
-                                            (name opkey))]
-                                  (throw
-                                    (ex-info
-                                      err
-                                      {:filter                 opkey
-                                       :extensions-defined-for (keys (:filters extensions))}))))
-                              %
-                              fargs))
+                             (if (get-in extensions [:filters opkey])
+                               (get-in extensions [:filters opkey])
+                               (let [err (rc-error
+                                          x
+                                          "Filter op (%s) not found in the extensions"
+                                          (name opkey))]
+                                 (throw
+                                  (ex-info
+                                   err
+                                   {:filter                 opkey
+                                    :extensions-defined-for (keys (:filters extensions))}))))
+                             %
+                             fargs))
                          (:filters x))]
         (reduce (fn [ret f] (f ret)) v filters))
 
@@ -93,9 +93,9 @@
 
       (g/ast-node? x)
       (throw (ex-info
-               (rc-error
-                 x "Evaluation error, EXPRs can only contains REFs and EXPRs, but saw %s" (:op x))
-               {}))
+              (rc-error
+               x "Evaluation error, EXPRs can only contains REFs and EXPRs, but saw %s" (:op x))
+              {}))
 
       (= x '!=)
       'not=
@@ -104,13 +104,12 @@
       x)
     (catch Exception e
       (let [msg (str "Render handle failure: " (or (.getMessage e) (str e)))]
-        (timbre/error e
-                      msg
-                      (merge (if (instance? ExceptionInfo e) (ex-data e))
-                             {:node   x
-                              :path   (if (g/ast-node? x) (:path x))
-                              :levels (try @level-stack (catch Exception _))
-                              :meta   (meta x)}))
+        (log/error e (str msg " "
+                          (merge (if (instance? ExceptionInfo e) (ex-data e))
+                                 {:node   x
+                                  :path   (if (g/ast-node? x) (:path x))
+                                  :levels (try @level-stack (catch Exception _))
+                                  :meta   (meta x)})))
         (->EvalError msg)))))
 
 (defn tagname
@@ -141,7 +140,7 @@
   (map->Handled m))
 
 (defmulti handle
-          (fn [extensions state level-stack node loc] (:op node)))
+  (fn [extensions state level-stack node loc] (:op node)))
 
 (defmethod handle :VALUE
   [extensions state level-stack node loc]
@@ -151,14 +150,14 @@
 
 (defmethod handle :REF
   [extensions state level-stack node loc]
-  (timbre/trace "Processing" {:node node})
+  (log/trace (str "Processing " {:node node}))
   (if (:eval? state)
     (mk-handled :value (evaluate extensions (:context-map state) level-stack node))
     (mk-handled :value ::no-eval)))
 
 (defmethod handle :EXPR
   [extensions state level-stack node loc]
-  (timbre/trace "Processing" {:node node})
+  (log/trace (str "Processing " {:node node}))
   (if (:eval? state)
     (mk-handled :value (evaluate extensions (:context-map state) level-stack node))
     (mk-handled :value ::no-eval)))
@@ -178,7 +177,7 @@
 
 (defmethod handle :ENDWITH
   [extensions state level-stack node loc]
-  (timbre/trace "Processing" {:node node})
+  (log/trace (str "Processing " {:node node}))
   (validate-state-level! state level-stack :WITH node)
   (mk-handled :drop-state? true :value ::no-value))
 
@@ -187,19 +186,18 @@
   (try
     (thunk)
     (catch Exception e
-      (timbre/error e
-                    (str "Render handle failure, exception in inline-ctag: "
-                         (or (.getMessage e) e))
-                    (merge (if (instance? ExceptionInfo e) (ex-data e))
-                           {:node   node
-                            :path   (:path node)
-                            :levels @level-stack
-                            :meta   (meta node)}))
+      (log/error e (str "Render handle failure, exception in inline-ctag: "
+                        (or (.getMessage e) e) " "
+                        (merge (if (instance? ExceptionInfo e) (ex-data e))
+                               {:node   node
+                                :path   (:path node)
+                                :levels @level-stack
+                                :meta   (meta node)})))
       ::eval-error)))
 
 (defmethod handle :CTAG
   [extensions {:keys [context-map] :as state} level-stack node loc]
-  (timbre/trace "Processing" {:node node})
+  (log/trace (str "Processing " {:node node}))
   (let [inline-f (get-in extensions [:inline-ctags (:ctag node)])
         block-f (get-in extensions [:block-ctags (:ctag node)])
         eval? (:eval? state)
@@ -211,13 +209,12 @@
       (let [msg (rc-error node
                           "Render handle failure: ctag (%s) op not found in the extensions"
                           (name (:ctag node)))]
-        (timbre/error msg
-                      {:path         (:path node)
-                       :levels       @level-stack
-                       :meta         (meta node)
-                       :ctag         (:ctag node)
-                       :inline-ctags (keys (:inline-ctags extensions))
-                       :block-ctags  (keys (:block-ctags extensions))})
+        (log/error (str msg " " {:path         (:path node)
+                                 :levels       @level-stack
+                                 :meta         (meta node)
+                                 :ctag         (:ctag node)
+                                 :inline-ctags (keys (:inline-ctags extensions))
+                                 :block-ctags  (keys (:block-ctags extensions))}))
         (mk-handled :value ::eval-error :err-msg msg))
 
       (and (not (or inline-f block-f)) (not eval?))
@@ -252,7 +249,7 @@
       (and end? eval?)
       (mk-handled
         ; Process content with block-f, but we do this in `unroll-rows`
-        :drop-state? true)
+       :drop-state? true)
 
       (and end? (not eval?))
       (mk-handled :value ::no-eval
@@ -260,9 +257,9 @@
 
 (defmethod handle :FOR
   [extensions state level-stack node loc]
-  (timbre/trace "Processing" {:node node})
+  (log/trace (str "Processing " {:node node}))
   (when (some (partial = :debug) (:options node))
-    (timbre/debug "  With context" state))
+    (log/debug (str "  With context " state)))
   (when-not (zero? (-> node :path second))
     (throw (ex-info "`for` can only be used at the start of a row." {:path (-> node :path)})))
   (if (:eval? state)
@@ -271,10 +268,10 @@
                 lst
                 (let [err-msg
                       (rc-error node "`for` expects a sequential values, but has `%s`" (type lst))]
-                  (timbre/error err-msg {:node   node
-                                         :path   (:path node)
-                                         :levels @level-stack
-                                         :meta   (meta node)})
+                  (log/error (str err-msg " " {:node   node
+                                               :path   (:path node)
+                                               :levels @level-stack
+                                               :meta   (meta node)}))
                   (->EvalError err-msg)))]
 
       (cond
@@ -317,7 +314,7 @@
 (defmethod handle :ENDFOR
   [extensions {:keys [for/remaining for/loop-var bookmark context-map] :as state}
    level-stack node loc]
-  (timbre/trace "Processing" {:node node})
+  (log/trace (str "Processing " {:node node}))
   (validate-state-level! state level-stack :FOR node)
   (when-not (zero? (-> node :path second))
     (throw (ex-info "`endfor` can only be used at the start of a row." {})))
@@ -338,7 +335,7 @@
 
 (defmethod handle :IF
   [extensions state level-stack node loc]
-  (timbre/trace "Processing" {:node node})
+  (log/trace (str "Processing " {:node node}))
   (if (:eval? state)
     ; This could be, for example, a nested IF statement
     (let [tst (evaluate extensions (:context-map state) level-stack (:test node))]
@@ -356,7 +353,7 @@
 
 (defmethod handle :ELIF
   [extensions {:keys [if-branch-taken] :as state} level-stack node loc]
-  (timbre/trace "Processing" {:node node})
+  (log/trace (str "Processing " {:node node}))
   (let [tst (and (not if-branch-taken)
                  (evaluate extensions (:context-map state) level-stack (:test node)))]
     (mk-handled :value (if (eval-error? tst) tst ::no-value)
@@ -368,7 +365,7 @@
 
 (defmethod handle :ELSE
   [extensions {:keys [if-branch-taken] :as state} level-stack node loc]
-  (timbre/trace "Processing" {:node node})
+  (log/trace (str "Processing " {:node node}))
   (validate-state-level! state level-stack :IF node)
   (mk-handled :value ::no-value
               :new-state (-> state
@@ -378,7 +375,7 @@
 
 (defmethod handle :ENDIF
   [extensions state level-stack node loc]
-  (timbre/trace "Processing" {:node node})
+  (log/trace (str "Processing " {:node node}))
   (validate-state-level! state level-stack :IF node)
   (mk-handled :value ::no-value
               :drop-state? true))
@@ -387,7 +384,7 @@
 
 (defn vec-append-at
   [coll loop-indices value context-string]
-  (timbre/tracef "Collecting %s into %s %s at %s." value context-string coll loop-indices)
+  (log/tracef "Collecting %s into %s %s at %s." value context-string coll loop-indices)
   (let [[i & more-i] loop-indices]
     (cond
       (and (seq more-i) (contains? coll i))
@@ -425,72 +422,72 @@
 
 (defn render-ast
   [context-map extensions ast]
-  (timbre/info "Render ast (alloy)")
+  (log/info "Render ast (alloy)")
   (let [ast2 (seq (filter-ast ast))]
-    (timbre/tracef "AST:\n%s\nFilter extensions provided for: %s"
-                   ast2 (or (-> extensions :filters keys) "None"))
+    (log/tracef "AST:\n%s\nFilter extensions provided for: %s"
+                ast2 (or (-> extensions :filters keys) "None"))
     (let [ast-zipper (ast-zip ast2)]
       (z/root
-        (loop [loc ast-zipper
-               state-stack (list (new-render-state context-map))]
-          (when (or (z/end? loc)
-                    (and (meta loc) (not (z/branch? loc))))
-            (let [n (z/node loc)]
-              (timbre/trace "Render with stack"
-                            {:node              (cond
-                                                  (z/end? loc) :end
-                                                  (g/ast-node? n) (into {} n)
-                                                  (meta n) (:path (meta n))
-                                                  :else n)
-                             :state-stack-depth (count state-stack)
-                             :state-stack-top   (dissoc (peek state-stack) :context-map)})))
+       (loop [loc ast-zipper
+              state-stack (list (new-render-state context-map))]
+         (when (or (z/end? loc)
+                   (and (meta loc) (not (z/branch? loc))))
+           (let [n (z/node loc)]
+             (log/trace (str "Render with stack "
+                             {:node              (cond
+                                                   (z/end? loc) :end
+                                                   (g/ast-node? n) (into {} n)
+                                                   (meta n) (:path (meta n))
+                                                   :else n)
+                              :state-stack-depth (count state-stack)
+                              :state-stack-top   (dissoc (peek state-stack) :context-map)}))))
 
-          (cond
+         (cond
 
-            (and (z/end? loc) (not= (count state-stack) 1))
-            (template-err "Unbalanced template" state-stack loc)
+           (and (z/end? loc) (not= (count state-stack) 1))
+           (template-err "Unbalanced template" state-stack loc)
 
-            (z/end? loc) loc
+           (z/end? loc) loc
 
-            (z/branch? loc) (recur (z/next loc) state-stack)
+           (z/branch? loc) (recur (z/next loc) state-stack)
 
-            :else
-            (let [node (z/node loc)
-                  {:keys [new-state drop-state? value rewind bookmark last-loop-iter loop-count]}
-                  (handle extensions (peek state-stack)
-                          (delay (reverse (map :level state-stack)))
-                          node loc)
+           :else
+           (let [node (z/node loc)
+                 {:keys [new-state drop-state? value rewind bookmark last-loop-iter loop-count]}
+                 (handle extensions (peek state-stack)
+                         (delay (reverse (map :level state-stack)))
+                         node loc)
 
-                  [value err-msg] (if (eval-error? value)
-                                    [::eval-error (:err-msg value)]
-                                    [value nil])
+                 [value err-msg] (if (eval-error? value)
+                                   [::eval-error (:err-msg value)]
+                                   [value nil])
 
                   ; get this value before looking at the updated stack:
-                  collector? (-> state-stack peek :collector?)
-                  updated-stack (cond-> state-stack
-                                        drop-state? pop
-                                        new-state (conj new-state))
-                  loop-indices (-> updated-stack peek :for/loop-indices)
-                  loc2 (cond
+                 collector? (-> state-stack peek :collector?)
+                 updated-stack (cond-> state-stack
+                                 drop-state? pop
+                                 new-state (conj new-state))
+                 loop-indices (-> updated-stack peek :for/loop-indices)
+                 loc2 (cond
                          ; Inside a loop
-                         (and collector? (not= value ::no-value))
-                         (z/edit loc update :collector vec-append-at loop-indices value
-                                 "collector")
+                        (and collector? (not= value ::no-value))
+                        (z/edit loc update :collector vec-append-at loop-indices value
+                                "collector")
                          ; An evaluated REF or a static value outside a loop, or
                          ; in the true part of a conditional. Or (inside false
                          ; part of IF or empty FOR), value could be ::no-eval
-                         :else
-                         (z/edit loc assoc :value value))
-                  updated-loc (cond-> loc2
-                                      err-msg (z/edit assoc :err-msg err-msg)
-                                      bookmark (set-bookmark bookmark)
-                                      loop-count (z/edit assoc :loop-count loop-count)
-                                      last-loop-iter (z/edit
-                                                       update :max-indices vec-append-at
-                                                       loop-indices last-loop-iter "max-indices")
-                                      rewind (rewind-to-bookmark
-                                               (-> updated-stack peek :bookmark)))]
-              (recur (z/next updated-loc) updated-stack))))))))
+                        :else
+                        (z/edit loc assoc :value value))
+                 updated-loc (cond-> loc2
+                               err-msg (z/edit assoc :err-msg err-msg)
+                               bookmark (set-bookmark bookmark)
+                               loop-count (z/edit assoc :loop-count loop-count)
+                               last-loop-iter (z/edit
+                                               update :max-indices vec-append-at
+                                               loop-indices last-loop-iter "max-indices")
+                               rewind (rewind-to-bookmark
+                                       (-> updated-stack peek :bookmark)))]
+             (recur (z/next updated-loc) updated-stack))))))))
 
 (defn single-or-reduce-str
   [coll]
@@ -534,8 +531,8 @@
   value is a literal just use the value as is."
   [loop-depth row]
   (let [remove-row? (every?
-                      (fn [cell-seq] (->> cell-seq (map :value) (every? #{::no-value ::no-eval})))
-                      row)]
+                     (fn [cell-seq] (->> cell-seq (map :value) (every? #{::no-value ::no-eval})))
+                     row)]
     (cond
       remove-row?
       [(map->Item {:op        (-> row first first :op)
@@ -581,13 +578,13 @@
             [endfor-row & u2] unprocessed
             [p3 u3 etris2] (unroll* loop-depth u2)]
         [(concat
-           [(map->Item {:op            op
-                        :path          path
-                        :loop-count    loop-count
-                        :end-token-row (last etris)
-                        :children      processed})]
-           (row->items loop-depth endfor-row)
-           p3)
+          [(map->Item {:op            op
+                       :path          path
+                       :loop-count    loop-count
+                       :end-token-row (last etris)
+                       :children      processed})]
+          (row->items loop-depth endfor-row)
+          p3)
          u3
          (into (pop etris) etris2)])
 
@@ -604,5 +601,5 @@
 
 (defn unroll
   [rows]
-  (timbre/info "Starting unroll pass...")
+  (log/info "Starting unroll pass...")
   (first (unroll* 0 rows)))

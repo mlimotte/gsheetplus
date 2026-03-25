@@ -1,9 +1,9 @@
-(ns skipp.alloy.grammar-test
+(ns gsheetplus.alloy.grammar-test
   (:require
    [clojure.test :refer :all]
    [clojure.zip :as z]
-   [skipp.alloy.grammar :refer :all]
-   [skipp.alloy.examples :refer [context-map1]])
+   [gsheetplus.alloy.grammar :refer :all]
+   [gsheetplus.alloy.examples :refer [context-map1]])
   (:import
    clojure.lang.ExceptionInfo))
 
