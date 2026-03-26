@@ -8,10 +8,10 @@
            (com.google.api.client.googleapis.json GoogleJsonResponseException)
            (com.google.api.services.sheets.v4 Sheets)
            (com.google.api.services.sheets.v4.model
-             AddSheetRequest AutoFillRequest BatchUpdateSpreadsheetRequest
-             CopySheetToAnotherSpreadsheetRequest DeleteDimensionRequest DeleteSheetRequest
-             DimensionRange GridRange InsertDimensionRequest CopyPasteRequest Request
-             SheetProperties SourceAndDestination UpdateCellsRequest UpdateSheetPropertiesRequest)))
+            AddSheetRequest AutoFillRequest BatchUpdateSpreadsheetRequest
+            CopySheetToAnotherSpreadsheetRequest DeleteDimensionRequest DeleteSheetRequest
+            DimensionRange GridRange InsertDimensionRequest CopyPasteRequest Request
+            SheetProperties SourceAndDestination UpdateCellsRequest UpdateSheetPropertiesRequest)))
 
 ;;; ── Error helpers ─────────────────────────────────────────────────────────
 
@@ -182,17 +182,17 @@
   (span/with-span! ["gsheetplus/exec!" {:spreadsheet.id spreadsheet-id
                                         :request.count  (count requests)}]
     (do-with-retries
-      {:max-retries      2
-       :retry-delay      [:random-exp-backoff :base 10000 :+/- 0.25 :max 120000]
-       :retryable-error? rate-limit-error?
-       :log-level        :warn
-       :message          "Caught 429 (RATE LIMIT), retrying"}
-      #(-> service
-           .spreadsheets
-           (.batchUpdate spreadsheet-id
-                         (doto (BatchUpdateSpreadsheetRequest.)
-                           (.setRequests requests)))
-           .execute))))
+     {:max-retries      2
+      :retry-delay      [:random-exp-backoff :base 10000 :+/- 0.25 :max 120000]
+      :retryable-error? rate-limit-error?
+      :log-level        :warn
+      :message          "Caught 429 (RATE LIMIT), retrying"}
+     #(-> service
+          .spreadsheets
+          (.batchUpdate spreadsheet-id
+                        (doto (BatchUpdateSpreadsheetRequest.)
+                          (.setRequests requests)))
+          .execute))))
 
 (declare update-grid-request insert-dimension-request insert-rows-request)
 (defn append-rows!
@@ -249,15 +249,15 @@
   [sheet-id row-idx col-idx data]
   (-> (Request.)
       (.setUpdateCells
-        (-> (UpdateCellsRequest.)
-            (.setRange (-> (GridRange.)
-                           (.setSheetId (int sheet-id))
-                           (.setStartRowIndex (int row-idx))
-                           (.setStartColumnIndex (int col-idx))
-                           (.setEndRowIndex (int (+ row-idx (count data))))
-                           (.setEndColumnIndex (int (+ col-idx (count (first data)))))))
-            (.setRows (mapv cell/row->row-data data))
-            (.setFields "userEnteredValue")))))
+       (-> (UpdateCellsRequest.)
+           (.setRange (-> (GridRange.)
+                          (.setSheetId (int sheet-id))
+                          (.setStartRowIndex (int row-idx))
+                          (.setStartColumnIndex (int col-idx))
+                          (.setEndRowIndex (int (+ row-idx (count data))))
+                          (.setEndColumnIndex (int (+ col-idx (apply max (map count data)))))))
+           (.setRows (mapv cell/row->row-data data))
+           (.setFields "userEnteredValue")))))
 
 (defn update-cells-request
   "UpdateCellsRequest for a single row of data at [row-idx col-idx]. 0-based."
@@ -269,24 +269,24 @@
   [sheet-id start-row end-row]
   (-> (Request.)
       (.setDeleteDimension
-        (-> (DeleteDimensionRequest.)
-            (.setRange (-> (DimensionRange.)
-                           (.setSheetId sheet-id)
-                           (.setDimension "ROWS")
-                           (.setStartIndex (int start-row))
-                           (.setEndIndex (int end-row))))))))
+       (-> (DeleteDimensionRequest.)
+           (.setRange (-> (DimensionRange.)
+                          (.setSheetId sheet-id)
+                          (.setDimension "ROWS")
+                          (.setStartIndex (int start-row))
+                          (.setEndIndex (int end-row))))))))
 
 (defn delete-cols-request
   "DeleteDimensionRequest for COLUMNS [start-col, end-col). 0-based."
   [sheet-id start-col end-col]
   (-> (Request.)
       (.setDeleteDimension
-        (-> (DeleteDimensionRequest.)
-            (.setRange (-> (DimensionRange.)
-                           (.setSheetId (int sheet-id))
-                           (.setDimension "COLUMNS")
-                           (.setStartIndex (int start-col))
-                           (.setEndIndex (int end-col))))))))
+       (-> (DeleteDimensionRequest.)
+           (.setRange (-> (DimensionRange.)
+                          (.setSheetId (int sheet-id))
+                          (.setDimension "COLUMNS")
+                          (.setStartIndex (int start-col))
+                          (.setEndIndex (int end-col))))))))
 
 (defn insert-dimension-request
   "InsertDimensionRequest for `dim` (\"ROWS\" or \"COLUMNS\") starting at `start`.
@@ -294,13 +294,13 @@
   [sheet-id dim inherit-from-before start num]
   (doto (Request.)
     (.setInsertDimension
-      (doto (InsertDimensionRequest.)
-        (.setInheritFromBefore (boolean inherit-from-before))
-        (.setRange (doto (DimensionRange.)
-                     (.setSheetId (int sheet-id))
-                     (.setDimension dim)
-                     (.setStartIndex (int start))
-                     (.setEndIndex (int (+ start num)))))))))
+     (doto (InsertDimensionRequest.)
+       (.setInheritFromBefore (boolean inherit-from-before))
+       (.setRange (doto (DimensionRange.)
+                    (.setSheetId (int sheet-id))
+                    (.setDimension dim)
+                    (.setStartIndex (int start))
+                    (.setEndIndex (int (+ start num)))))))))
 
 (defn insert-rows-request
   "InsertDimensionRequest for ROWS before `start-row`. 0-based."
@@ -312,15 +312,15 @@
   [sheet-id src-start-row src-end-row dst-start-row dst-end-row]
   (-> (Request.)
       (.setCopyPaste
-        (-> (CopyPasteRequest.)
-            (.setSource (-> (GridRange.)
-                            (.setSheetId sheet-id)
-                            (.setStartRowIndex (int src-start-row))
-                            (.setEndRowIndex (int src-end-row))))
-            (.setDestination (-> (GridRange.)
-                                 (.setSheetId sheet-id)
-                                 (.setStartRowIndex (int dst-start-row))
-                                 (.setEndRowIndex (int dst-end-row))))))))
+       (-> (CopyPasteRequest.)
+           (.setSource (-> (GridRange.)
+                           (.setSheetId sheet-id)
+                           (.setStartRowIndex (int src-start-row))
+                           (.setEndRowIndex (int src-end-row))))
+           (.setDestination (-> (GridRange.)
+                                (.setSheetId sheet-id)
+                                (.setStartRowIndex (int dst-start-row))
+                                (.setEndRowIndex (int dst-end-row))))))))
 
 (defn copypaste-cols-request
   "CopyPasteRequest copying columns [src-start-col, src-end-col) to dst-start-col.
@@ -329,16 +329,16 @@
    {:keys [paste-type]}]
   (-> (Request.)
       (.setCopyPaste
-        (-> (CopyPasteRequest.)
-            (cond-> paste-type (.setPasteType paste-type))
-            (.setSource (-> (GridRange.)
-                            (.setSheetId (int sheet-id))
-                            (.setStartColumnIndex (int src-start-col))
-                            (.setEndColumnIndex (int src-end-col))))
-            (.setDestination (-> (GridRange.)
-                                 (.setSheetId (int sheet-id))
-                                 (.setStartColumnIndex (int dst-start-col))
-                                 (.setEndColumnIndex (int dst-end-col))))))))
+       (-> (CopyPasteRequest.)
+           (cond-> paste-type (.setPasteType paste-type))
+           (.setSource (-> (GridRange.)
+                           (.setSheetId (int sheet-id))
+                           (.setStartColumnIndex (int src-start-col))
+                           (.setEndColumnIndex (int src-end-col))))
+           (.setDestination (-> (GridRange.)
+                                (.setSheetId (int sheet-id))
+                                (.setStartColumnIndex (int dst-start-col))
+                                (.setEndColumnIndex (int dst-end-col))))))))
 
 (defn auto-fill-request
   "AutoFillRequest filling from columns [src-start-col, src-end-col) for `fill-length` columns.
@@ -346,15 +346,15 @@
   [sheet-id src-start-col src-end-col fill-length]
   (-> (Request.)
       (.setAutoFill
-        (doto (AutoFillRequest.)
-          (.setSourceAndDestination
-            (doto (SourceAndDestination.)
-              (.setSource (-> (GridRange.)
-                              (.setSheetId (int sheet-id))
-                              (.setStartColumnIndex (int src-start-col))
-                              (.setEndColumnIndex (int src-end-col))))
-              (.setDimension "COLUMNS")
-              (.setFillLength (int fill-length))))))))
+       (doto (AutoFillRequest.)
+         (.setSourceAndDestination
+          (doto (SourceAndDestination.)
+            (.setSource (-> (GridRange.)
+                            (.setSheetId (int sheet-id))
+                            (.setStartColumnIndex (int src-start-col))
+                            (.setEndColumnIndex (int src-end-col))))
+            (.setDimension "COLUMNS")
+            (.setFillLength (int fill-length))))))))
 
 ;;; ── Convenience write fns ─────────────────────────────────────────────────
 
@@ -381,10 +381,10 @@
   (let [response (exec! service spreadsheet-id
                         [(-> (Request.)
                              (.setAddSheet
-                               (-> (AddSheetRequest.)
-                                   (.setProperties
-                                     (-> (SheetProperties.)
-                                         (.setTitle title))))))])]
+                              (-> (AddSheetRequest.)
+                                  (.setProperties
+                                   (-> (SheetProperties.)
+                                       (.setTitle title))))))])]
     (-> response
         (get "replies")
         (first)
@@ -397,8 +397,8 @@
   (exec! service spreadsheet-id
          [(-> (Request.)
               (.setDeleteSheet
-                (doto (DeleteSheetRequest.)
-                  (.setSheetId sheet-id))))]))
+               (doto (DeleteSheetRequest.)
+                 (.setSheetId sheet-id))))]))
 
 (defn- set-sheet-properties!
   [service spreadsheet-id request]
@@ -414,22 +414,22 @@
   [^Sheets service spreadsheet-id sheet-id new-sheet-title]
   (log/info "Updating sheet title" {:sheet-id sheet-id :new-title new-sheet-title})
   (set-sheet-properties!
-    service spreadsheet-id
-    (-> (Request.)
-        (.setUpdateSheetProperties
-          (doto (UpdateSheetPropertiesRequest.)
-            (.setProperties (doto (SheetProperties.)
-                              (.setTitle new-sheet-title)
-                              (.setSheetId (Integer. sheet-id))))
-            (.setFields "title"))))))
+   service spreadsheet-id
+   (-> (Request.)
+       (.setUpdateSheetProperties
+        (doto (UpdateSheetPropertiesRequest.)
+          (.setProperties (doto (SheetProperties.)
+                            (.setTitle new-sheet-title)
+                            (.setSheetId (Integer. sheet-id))))
+          (.setFields "title"))))))
 
 (defn update-title-with-incrementing-name
   "Rename sheet `sheet-id`. If name already exists, append `.01`, `.02`, etc."
   [service spreadsheet-id sheet-id sheet-name0]
   (loop [sheet-name sheet-name0 subver 1]
     (if (try-catch-gsr-exception
-          #(update-title service spreadsheet-id sheet-id sheet-name)
-          #"already exists")
+         #(update-title service spreadsheet-id sheet-id sheet-name)
+         #"already exists")
       (recur (format "%s.%02d" sheet-name0 subver) (inc subver))
       sheet-name)))
 
@@ -438,14 +438,14 @@
   [^Sheets service spreadsheet-id sheet-id hidden?]
   (log/info "Setting sheet hidden" {:sheet-id sheet-id :hidden? hidden?})
   (set-sheet-properties!
-    service spreadsheet-id
-    (-> (Request.)
-        (.setUpdateSheetProperties
-          (doto (UpdateSheetPropertiesRequest.)
-            (.setProperties (doto (SheetProperties.)
-                              (.setHidden hidden?)
-                              (.setSheetId (Integer. sheet-id))))
-            (.setFields "hidden"))))))
+   service spreadsheet-id
+   (-> (Request.)
+       (.setUpdateSheetProperties
+        (doto (UpdateSheetPropertiesRequest.)
+          (.setProperties (doto (SheetProperties.)
+                            (.setHidden hidden?)
+                            (.setSheetId (Integer. sheet-id))))
+          (.setFields "hidden"))))))
 
 (defn copy-to
   "Copy sheet `src-sheet-id` from `src-spreadsheet-id` to `dst-spreadsheet-id`.
