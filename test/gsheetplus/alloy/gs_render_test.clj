@@ -122,3 +122,36 @@
             {:end-rowidx   1
              :instruct     :delete-rows
              :start-rowidx 0}]))))
+
+(deftest test-nested-for-variable-inner-length
+  ;; Regression test: when the inner FOR iterates a per-outer-iteration
+  ;; sequence (different lengths per outer iter), each outer block must
+  ;; expand to its own inner count. Previously the inner :loop-count on the
+  ;; AST node was overwritten on each outer iter, so every outer block used
+  ;; the last iteration's count.
+  (let [ctx    {:groups [{:name "A" :results [1 2 3]}
+                         {:name "B" :results [10]}
+                         {:name "C" :results [100 200]}]}
+        zipper (z/vector-zip [["{% for g in groups %}"]
+                              ["{{g.name}}"]
+                              ["{% for r in g.results %}"]
+                              ["{{r}}"]
+                              ["{%endfor%}"]
+                              ["{%endfor%}"]])
+        input  (render/unroll
+                (render/render-ast ctx nil (g/parse-struct g/the-parser zipper)))
+        instrs (generate-instructions input)
+        dupes  (filter #(= :dupe-rows (:instruct %)) instrs)
+        inner-dupes (filter #(= 1 (- (:end-src-row-exclusive %) (:rowidx %))) dupes)
+        inner-block-counts (map :num-blocks inner-dupes)
+        updates (filter #(= :update (:instruct %)) instrs)
+        result-updates (filter #(#{1 2 3 10 100 200} (:value %)) updates)]
+    ;; One inner-dupe per outer iteration (3), each with its own num-blocks
+    (is (= 3 (count inner-dupes))
+        "Should emit one inner dupe-rows instruction per outer iteration")
+    (is (= [3 1 2] (reverse inner-block-counts))
+        "Inner num-blocks must match each group's results count")
+    ;; All 6 result values should appear in the instructions
+    (is (= #{1 2 3 10 100 200} (set (map :value result-updates))))
+    (is (= 6 (count result-updates))
+        "Should emit one update per result across all groups")))

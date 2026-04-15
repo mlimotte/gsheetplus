@@ -86,7 +86,10 @@
          (= op :FOR)
          (let [end-rowidx (+ (:end-token-row item) row-offset)
                num-rows (dec (- end-rowidx rowidx))
-               num-blocks (:loop-count item)
+               lc (:loop-count item)
+               num-blocks (if (empty? loop-indices)
+                            (first lc)
+                            (get-in lc loop-indices))
                children (:children item)]
            (-> []
                (conj (delete-rows-instruct rowidx))

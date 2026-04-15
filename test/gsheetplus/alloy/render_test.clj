@@ -549,7 +549,7 @@
     (is (= (unroll rendered)
            [(map->Item {:op            :FOR,
                         :path          [0 0]
-                        :loop-count    2
+                        :loop-count    [2]
                         :end-token-row 3
                         :children      [(map->Item
                                          {:op        :MERGED-VALUE
@@ -582,7 +582,7 @@
     (is (= (unroll rendered)
            [(map->Item {:op            :FOR
                         :path          [0 0]
-                        :loop-count    0
+                        :loop-count    [0]
                         :end-token-row 2
                         :children      [(map->Item
                                          {:op        :REF
@@ -601,7 +601,7 @@
     (is (= (unroll rendered)
            [(map->Item {:op            :FOR,
                         :path          [0 0]
-                        :loop-count    2
+                        :loop-count    [2]
                         :end-token-row 2
                         :children      [(map->Item
                                          {:op        :REF
@@ -623,12 +623,12 @@
            [(map->Item
              {:op            :FOR,
               :path          [0 0]
-              :loop-count    3
+              :loop-count    [3]
               :end-token-row 4
               :children      [(map->Item
                                {:op            :FOR
                                 :path          [1 0]
-                                :loop-count    2
+                                :loop-count    [2 2 2]
                                 :end-token-row 3
                                 :children      [(map->Item
                                                  {:op        :MERGED-VALUE

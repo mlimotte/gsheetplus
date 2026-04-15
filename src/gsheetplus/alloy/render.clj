@@ -481,7 +481,11 @@
                  updated-loc (cond-> loc2
                                err-msg (z/edit assoc :err-msg err-msg)
                                bookmark (set-bookmark bookmark)
-                               loop-count (z/edit assoc :loop-count loop-count)
+                               loop-count (z/edit update :loop-count
+                                                  (fnil vec-append-at [])
+                                                  (or (-> state-stack peek :for/loop-indices) [])
+                                                  loop-count
+                                                  "loop-count")
                                last-loop-iter (z/edit
                                                update :max-indices vec-append-at
                                                loop-indices last-loop-iter "max-indices")
