@@ -234,6 +234,22 @@ When **writing**, values are coerced via the `CellDataValue` protocol. Built-in 
 ;; => {:spreadsheet-id "ABC" :sheet-id 123}
 ```
 
+## Document Generation / Templating (Alloy)
+
+Alloy is a template engine for Google Sheets. It reads a sheet containing Jinja-like template syntax (`{{ expr }}`, `{% for %}`, `{% if %}`, etc.), evaluates it against a Clojure data map, and writes the results back in place — preserving your formatting, formulas, and static content.
+
+```clojure
+(require '[gsheetplus.alloy.api :as alloy])
+
+(alloy/render-google-sheet service spreadsheet-id "Sheet1"
+  {:name "Alice" :items [{:sku "A1" :qty 3} {:sku "B2" :qty 7}]}
+  nil)
+```
+
+Supports variable substitution, arithmetic, filters, for-loops (with nesting), conditionals, and custom extensions.
+
+See [doc/alloy.md](doc/alloy.md) for the full syntax reference and API details.
+
 ## Observability
 
 OTEL spans are emitted automatically for major I/O calls when the OpenTelemetry Java agent is present:
