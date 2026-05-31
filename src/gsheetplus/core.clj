@@ -257,7 +257,7 @@
                           (.setEndRowIndex (int (+ row-idx (count data))))
                           (.setEndColumnIndex (int (+ col-idx (apply max (map count data)))))))
            (.setRows (mapv cell/row->row-data data))
-           (.setFields "userEnteredValue")))))
+           (.setFields "userEnteredValue,userEnteredFormat")))))
 
 (defn update-cells-request
   "UpdateCellsRequest for a single row of data at [row-idx col-idx]. 0-based."

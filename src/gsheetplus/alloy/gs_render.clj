@@ -2,7 +2,8 @@
   (:require
    [gsheetplus.core :as g+core]
    [clojure.tools.logging :as log]
-   [gsheetplus.alloy.render :as render]))
+   [gsheetplus.alloy.render :as render])
+  (:import (java.time LocalDate)))
 
 (def row (comp first :path))
 (def col (comp second :path))
@@ -41,7 +42,7 @@
 (defn update-instruct
   [rowidx colidx value]
   (hash-map :instruct :update :rowidx rowidx :colidx colidx
-            :value (if (or (number? value) (boolean? value))
+            :value (if (or (number? value) (boolean? value) (instance? LocalDate value))
                      value
                      (str value))))
 
